@@ -2,16 +2,16 @@
 const express = require('express');
 var cors = require('cors');
 const mongoose = require('mongoose');
+const session = require('express-session');
 require('dotenv').config();
 const authRoutes = require('./src/routes/auth.js');
 
 
 
 const app = express();
+app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(cors());
-
-
 
  const main = async() => {
  const PORT = process.env.PORT;
@@ -31,6 +31,14 @@ app.use(cors());
          }
  main();
 
+ // Configure express-session
+app.use(session({ 
+    secret: 'keyboard cat', // This should be a long, random string used to sign the session ID cookie
+    resave: false, 
+    saveUninitialized: false 
+  }));
+  
+  
 // Use the imported routes
 app.use('/auth', authRoutes);
 // const crypto = require('crypto');

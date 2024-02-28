@@ -2,11 +2,19 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const passport = require('passport');
+const initializePassport = require('../middleware/passport.js');
 const router = express.Router();
 const User = require('../models/Users.js');
 const verifyToken = require('../middleware/index.js');
+
+
+initializePassport(passport);
+
+// Configure express-session
+
     // Route for user login
-router.post('/login', async (req, res) => {
+router.post('/login', passport.authenticate('local'), async (req, res) => {
     try {
         // Extract login credentials from request body
         const { username, password } = req.body;
@@ -34,7 +42,7 @@ router.post('/login', async (req, res) => {
     }
 });
 // Route for user registration
-router.post('/register', async (req, res) => {
+router.post('/register',  async (req, res) => {
     try {
         // Extract user registration data from request body
         const { firstname, lastname, username, email, password } = req.body;
@@ -50,7 +58,6 @@ router.post('/register', async (req, res) => {
 
         // Save the new user to the database
         await newUser.save();
-        console.log('User Created, Welcome');
 
         // Generate JWT for the newly registered user
         const token = newUser.generateJWT();
@@ -85,4 +92,5 @@ router.post('/logout', (req, res) => {
     res.json({ message: 'Logout successful' });
 });
 
+  
 module.exports = router;
