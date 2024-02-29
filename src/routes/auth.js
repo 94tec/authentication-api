@@ -3,8 +3,9 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
-const initializePassport = require('../middleware/passport.js');
 const router = express.Router();
+
+const initializePassport = require('../middleware/passport.js');
 const User = require('../models/Users.js');
 const verifyToken = require('../middleware/index.js');
 
@@ -14,33 +15,23 @@ initializePassport(passport);
 // Configure express-session
 
     // Route for user login
-router.post('/login', passport.authenticate('local'), async (req, res) => {
-    try {
-        // Extract login credentials from request body
-        const { username, password } = req.body;
-
-        // Check if the user exists
-        const user = await User.findOne({ username });
-        if (!user) {
-            return res.status(401).json({ message: 'Invalid username or password' });
+    router.post('/login', passport.authenticate('local', { session: false }), async (req, res) => {
+        try {
+            // If passport.authenticate('local') succeeds, the user object will be attached to req.user
+            const user = req.user;
+    
+            // Generate JWT token
+            const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+            const refreshToken = jwt.sign({userId: user._id}, process.env.JWT_REFRESH_TOKEN, { expiresIn: '7d' });
+    
+            // Respond with success message and JWT
+            res.json({ message: 'Login successful', token, refreshToken });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Internal server error' });
         }
-
-        // Verify the password
-        const passwordMatch = await bcrypt.compare(password, user.password);
-        if (!passwordMatch) {
-            return res.status(401).json({ message: 'Invalid username or password' });
-        }
-
-        // Generate JWT token
-        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-        // Respond with success message and JWT
-        res.json({ message: 'Login successful', token });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-});
+    });
+    
 // Route for user registration
 router.post('/register',  async (req, res) => {
     try {
