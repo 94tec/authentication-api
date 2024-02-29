@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const session = require('express-session');
 require('dotenv').config();
 const authRoutes = require('./src/routes/auth.js');
+const passport = require('./src/middleware/passport-google-auth')
 
 
 
@@ -38,7 +39,8 @@ app.use(session({
     saveUninitialized: false 
   }));
   
-  
+  app.use(passport.initialize());
+  app.use(passport.session());  
 // Use the imported routes
 app.use('/auth', authRoutes);
 // const crypto = require('crypto');

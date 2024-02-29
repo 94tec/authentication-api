@@ -92,5 +92,13 @@ router.post('/logout', (req, res) => {
     res.json({ message: 'Logout successful' });
 });
 
-  
+//auth with google
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+router.get('//google/redirect',
+passport.authenticate('google', { failureRedirect: '/login' }),
+function(req, res) {
+  // Successful authentication, redirect home.
+  res.redirect('/');
+});
 module.exports = router;
