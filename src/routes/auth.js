@@ -8,12 +8,39 @@ const router = express.Router();
 const initializePassport = require('../middleware/passport.js');
 const User = require('../models/Users.js');
 const verifyToken = require('../middleware/index.js');
-
+const { validateRegistration } = require('../middleware/validatorMiddleware');
 
 initializePassport(passport);
 
-// Configure express-session
+// Route for user registration
+    router.post('/register',validateRegistration, async (req, res) => {
+        try {
+            // Extract user registration data from request body
+            const { firstname, lastname, username, email, password } = req.body;
 
+            // Check if the username or email already exists
+            const existingUser = await User.findOne({ $or: [{ username }, { email }] });
+            if (existingUser) {
+                return res.status(400).json({ message: 'Username or email already exists' });
+            }
+
+            // Create a new user instance
+            const newUser = new User({ firstname, lastname, username, email, password });
+
+            // Save the new user to the database
+            await newUser.save();
+
+            // Generate JWT for the newly registered user
+            const token = newUser.generateJWT();
+
+            // Respond with success message and JWT
+            res.status(201).json({ message: 'User registered successfully', token });
+        } catch (error) {
+            // Handle errors
+            console.error(error);
+            res.status(500).json({ message: 'Internal server error' });
+        }
+    });
     // Route for user login
     router.post('/login', passport.authenticate('local', { session: false }), async (req, res) => {
         try {
@@ -32,36 +59,6 @@ initializePassport(passport);
         }
     });
     
-// Route for user registration
-router.post('/register',  async (req, res) => {
-    try {
-        // Extract user registration data from request body
-        const { firstname, lastname, username, email, password } = req.body;
-
-        // Check if the username or email already exists
-        const existingUser = await User.findOne({ $or: [{ username }, { email }] });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Username or email already exists' });
-        }
-
-        // Create a new user instance
-        const newUser = new User({firstname,lastname, username, email, password });
-
-        // Save the new user to the database
-        await newUser.save();
-
-        // Generate JWT for the newly registered user
-        const token = newUser.generateJWT();
-
-        // Respond with success message and JWT
-        res.status(201).json({ message: 'User registered successfully', token });
-    } catch (error) {
-        // Handle errors
-        console.error(error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-});
-
 // Protected route example
 router.get('/protected', verifyToken, async (req, res) => {
     try {
