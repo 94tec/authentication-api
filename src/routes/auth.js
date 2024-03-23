@@ -7,7 +7,10 @@ const router = express.Router();
 
 const initializePassport = require('../middleware/passport.js');
 const User = require('../models/Users.js');
+// Import the AdminUserModel
+const AdminUser = require('../models/adminUserModel');
 const verifyToken = require('../middleware/index.js');
+const requireRole = require('../middleware/requireRole');
 const { validateRegistration } = require('../middleware/validatorMiddleware');
 
 initializePassport(passport);
@@ -16,7 +19,7 @@ initializePassport(passport);
     router.post('/register',validateRegistration, async (req, res) => {
         try {
             // Extract user registration data from request body
-            const { firstname, lastname, username, email, password } = req.body;
+            const { firstname, middlename, lastname, username,phonenumber, id, email, password } = req.body;
 
             // Check if the username or email already exists
             const existingUser = await User.findOne({ $or: [{ username }, { email }] });
@@ -25,7 +28,7 @@ initializePassport(passport);
             }
 
             // Create a new user instance
-            const newUser = new User({ firstname, lastname, username, email, password });
+            const newUser = new User({ firstname, middlename, lastname, username, phonenumber, id, email, password });
 
             // Save the new user to the database
             await newUser.save();
@@ -58,7 +61,25 @@ initializePassport(passport);
             res.status(500).json({ message: 'Internal server error' });
         }
     });
-    
+// Route to get logged in user's data
+router.get('/profile', verifyToken, async (req, res) => {
+    try {
+        // Assuming your verifyToken middleware adds the user's ID to req.user
+        const userId = req.user.userId;
+        
+        // Fetch the user from the database
+        const user = await User.findById(userId).select('-password'); // Exclude password from the result
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Respond with user data
+        res.json(user);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});    
 // Protected route example
 router.get('/protected', verifyToken, async (req, res) => {
     try {
