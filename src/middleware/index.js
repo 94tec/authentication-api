@@ -3,8 +3,8 @@ require('dotenv').config();
 // Middleware to verify JWT token
 function verifyToken(req, res, next) {
     // Get the token from the request headers
-    const token = req.headers.authorization && req.headers.authorization.split(' ')[1];
-    
+    const token = req.headers['authorization'] ? req.headers['authorization'].split(' ')[1] : null;
+
     // If token is not provided
     if (!token) {
         return res.status(401).json({ message: 'Access denied. Token is missing.' });
