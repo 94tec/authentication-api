@@ -9,8 +9,8 @@ const initializePassport = require('../middleware/passport.js');
 const User = require('../models/Users.js');
 // Import the AdminUserModel
 const AdminUser = require('../models/adminUserModel');
-const verifyToken = require('../middleware/index.js');
-const requireRole = require('../middleware/requireRole');
+const Tenant = require('../models/Tenant.js');
+const {verifyToken, requireRole } = require('../middleware/index.js');
 const { validateRegistration } = require('../middleware/validatorMiddleware');
 
 initializePassport(passport);
@@ -26,9 +26,8 @@ initializePassport(passport);
             if (existingUser) {
                 return res.status(400).json({ message: 'Username or email already exists' });
             }
-
             // Create a new user instance
-            const newUser = new User({ firstname, middlename, lastname, username, phonenumber, id, email, password });
+            const newUser = new User({ firstname, middlename, lastname, username, phonenumber, id, email, password, role: 'user' });
 
             // Save the new user to the database
             await newUser.save();
@@ -44,28 +43,35 @@ initializePassport(passport);
             res.status(500).json({ message: 'Internal server error' });
         }
     });
-    // Route for user login
-    router.post('/login', passport.authenticate('local', { session: false }), async (req, res) => {
-        try {
-            // If passport.authenticate('local') succeeds, the user object will be attached to req.user
-            const user = req.user;
-    
-            // Generate JWT token
-            const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-            const refreshToken = jwt.sign({userId: user._id}, process.env.JWT_REFRESH_TOKEN, { expiresIn: '7d' });
-    
-            // Respond with success message and JWT
-            res.json({ message: 'Login successful', token, refreshToken });
-        } catch (error) {
-            console.error(error);
-            res.status(500).json({ message: 'Internal server error' });
-        }
-    });
+// Route for user login
+router.post('/login', passport.authenticate('local', { session: false }), async (req, res) => {
+    try {
+        // If passport.authenticate('local') succeeds, the user object will be attached to req.user
+        const user = req.user;
+
+        // Create a payload containing user information
+        const payload = {
+            id: user._id,
+            email: user.email,
+            role: user.role
+        };
+        // Generate JWT token
+        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+        const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_TOKEN, { expiresIn: '7d' });
+
+        // Respond with success message and JWT
+        res.json({ message: 'Login successful', token, refreshToken });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 // Route to get logged in user's data
 router.get('/profile', verifyToken, async (req, res) => {
     try {
         // Assuming your verifyToken middleware adds the user's ID to req.user
-        const userId = req.user.userId;
+        const userId = req.user.id;
         
         // Fetch the user from the database
         const user = await User.findById(userId).select('-password'); // Exclude password from the result
@@ -79,16 +85,27 @@ router.get('/profile', verifyToken, async (req, res) => {
         console.error(error);
         res.status(500).json({ message: 'Internal server error' });
     }
+});
+// fetch  all clients 
+router.get('/users', verifyToken, async (req, res) => {
+    try {
+        // Fetch all users from the database
+        const users = await User.find({});
+        res.json(users);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });    
 // Protected route example
-router.get('/protected', verifyToken, async (req, res) => {
+router.get('/user', verifyToken, async (req, res) => {
     try {
         // Fetch user data using req.user
-        const user = await User.findById(req.user.userId);
+        const user = await User.findById(req.user.id);
         if (!user) {
             return res.status(404).json({ message: 'User not found.' });
         }
-        res.json({ message: 'Protected route accessed successfully.', user });
+        res.json({ message: 'User accessed successfully.', user });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Internal server error' });
@@ -109,5 +126,55 @@ passport.authenticate('google', { failureRedirect: '/login' }),
 function(req, res) {
   // Successful authentication, redirect home.
   res.redirect('/');
+});
+router.post('/tenant', verifyToken, requireRole('user'), async (req, res) => {
+    try {
+        const { name, email, phone } = req.body;
+
+        // Ensure that only authenticated users can create tenants
+        if (!req.user) {
+            return res.status(401).json({ message: 'Unauthorized. Please log in to create a tenant.' });
+        }
+
+        // Create the tenant associated with the authenticated user
+        const userId = req.user.id; // Assuming userId is included in the token payload
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const tenant = new Tenant({ name, email, phone, createdBy: userId });
+        await tenant.save();
+
+        // Now that tenant is created, you might want to fetch all tenants associated with the user again
+        const tenants = await Tenant.find({ createdBy: userId });
+
+        res.status(201).json({ message: 'Tenant created successfully.', tenant, tenants });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// get all tenants of the user
+router.get('/tenants', verifyToken, requireRole('user'), async (req, res) => {
+    try {
+        // Ensure that only authenticated users can access their tenants
+        if (!req.user) {
+            return res.status(401).json({ message: 'Unauthorized. Please log in to view your tenants.' });
+        }
+
+        // Retrieve the ID of the authenticated user from the token payload
+        const userId = req.user.id;
+
+        // Query the database to find all tenants associated with the user's ID
+        const tenants = await Tenant.find({ createdBy: userId });
+
+        // Return the list of tenants associated with the user
+        res.status(200).json({ tenants });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });
 module.exports = router;

@@ -6,6 +6,7 @@ const session = require('express-session');
 require('dotenv').config();
 const authRoutes = require('./src/routes/auth.js');
 const adminRoutes = require('./src/routes/adminAuth.js');
+const tenantRoutes = require('./src/routes/tenant.js')
 const passport = require('./src/middleware/passport-google-auth')
 
 

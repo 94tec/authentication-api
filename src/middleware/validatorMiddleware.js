@@ -1,5 +1,6 @@
 // validatorMiddleware.js
 const { check, validationResult } = require('express-validator');
+const Users = require('../models/Users');
 
 // Validation middleware for user registration
 const validateRegistration = [
@@ -43,5 +44,4 @@ const validateLogin = (req, res, next) => {
     // Continue to the next middleware if all validations pass
     next();
 };
-
 module.exports = { validateRegistration, validateLogin};

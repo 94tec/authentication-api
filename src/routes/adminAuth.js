@@ -9,9 +9,9 @@ const initializePassport = require('../middleware/passport.js');
 const User = require('../models/Users.js');
 // Import the AdminUserModel
 const AdminUser = require('../models/adminUserModel');
-const verifyToken = require('../middleware/index.js');
-const requireRole = require('../middleware/requireRole');
-const { validateRegistration, validateLogin } = require('../middleware/validatorMiddleware');
+const Tenant = require('../models/Tenant.js');
+const { verifyToken,verifyAdminToken, requireRole } = require('../middleware/index');
+const { validateRegistration, validateLogin} = require('../middleware/validatorMiddleware');
 
 initializePassport(passport);
 
@@ -61,9 +61,14 @@ router.post('/login', validateLogin, async (req, res) => {
             return res.status(403).json({ message: 'Access forbidden. You do not have admin privileges' });
         }
         
-
+        // Create a payload containing user information
+        const payload = {
+            id: adminUser._id,
+            email: adminUser.email,
+            role: adminUser.role
+        };
         // Generate JWT token
-        const token = jwt.sign({ id: adminUser._id, email: adminUser.email, role: adminUser.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
         // Respond with success message and token
         res.json({ message: 'Login successful Welcome to the admin page Dashboard', token });
@@ -107,12 +112,51 @@ router.get('/profile', verifyToken, requireRole('admin'), async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
-// fetch  all clients 
-router.get('/users', verifyToken, async (req, res) => {
+// create a tenant by admin and and assign to a user
+router.post('/tenant', verifyToken, async (req, res) => {
     try {
-        // Fetch all users from the database
-        const users = await User.find({});
-        res.json(users);
+        
+        const { name, email, phone, userId } = req.body; // Assuming userId is provided in the request body
+        
+        // Check if the user is an admin
+        if (req.user.role === 'admin') {
+            // If user is admin, check if userId is provided
+            if (!userId) {
+                return res.status(400).json({ message: 'User ID is required for tenant assignment.' });
+            }
+
+            // Check if the specified user exists
+            const user = await User.findById(userId);
+            if (!user) {
+                return res.status(404).json({ message: 'User not found.' });
+            }
+
+            // Create the tenant and assign it to the specified user
+            const tenant = new Tenant({ name, email, phone, createdBy: userId });
+            await tenant.save();
+            res.status(201).json({ message: 'Tenant created successfully.', tenant });
+        } else {
+            // If user is not an admin, restrict tenant creation
+            return res.status(403).json({ message: 'Access forbidden. Only admin users can create tenants for specific users.' });
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+// GET all tenants for all users (admin endpoint)
+router.get('/tenants', verifyAdminToken, async (req, res) => {
+    try {
+        // Ensure that only admins can access this endpoint
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access forbidden. Only admins can access this endpoint.' });
+        }
+
+        // Query the database to find all tenants for all users
+        const allTenants = await Tenant.find();
+
+        // Return the list of all tenants
+        res.status(200).json({ tenants: allTenants });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Internal server error' });
