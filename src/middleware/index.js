@@ -1,5 +1,7 @@
 // Example of verifyToken middleware
 const jwt = require('jsonwebtoken');
+require('dotenv').config();
+const AdminUser = require('../models/adminUserModel');
 
 function verifyToken(req, res, next) {
     const token = req.headers.authorization.split(' ')[1]; // Assuming the token is sent in the Authorization header
@@ -21,7 +23,6 @@ const verifyAdminToken = async (req, res, next) => {
     try {
         // Get the token from the request headers
         const token = req.headers.authorization ? req.headers.authorization.split(' ')[1] : null;
-
         // If token is not provided
         if (!token) {
             return res.status(401).json({ message: 'Access denied. Token is missing.' });
@@ -34,7 +35,7 @@ const verifyAdminToken = async (req, res, next) => {
             }
 
             // Check if the user exists and is an admin
-            const user = await User.findById(decoded.id);
+            const user = await AdminUser.findById(decoded.id);
             if (!user || user.role !== 'admin') {
                 return res.status(403).json({ message: 'Access forbidden. Only admins can access this endpoint.' });
             }

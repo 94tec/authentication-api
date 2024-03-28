@@ -1,6 +1,7 @@
 // admin routes
 const express = require('express');
 const bcrypt = require('bcrypt');
+require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const router = express.Router();
@@ -12,6 +13,7 @@ const AdminUser = require('../models/adminUserModel');
 const Tenant = require('../models/Tenant.js');
 const { verifyToken,verifyAdminToken, requireRole } = require('../middleware/index');
 const { validateRegistration, validateLogin} = require('../middleware/validatorMiddleware');
+const validateTenant = require('../middleware/validateTenant');
 
 initializePassport(passport);
 
@@ -113,14 +115,17 @@ router.get('/profile', verifyToken, requireRole('admin'), async (req, res) => {
     }
 });
 // create a tenant by admin and and assign to a user
-router.post('/tenant', verifyToken, async (req, res) => {
+router.post('/tenant', verifyToken, validateTenant, async (req, res) => {
     try {
-        
-        const { name, email, phone, userId } = req.body; // Assuming userId is provided in the request body
-        
+        // Extract tenant data from the request body
+        const { firstName, middleName, lastName, idNumber, dateOfBirth, phoneNumber1, phoneNumber2, emergencyContact, email, address, lease } = req.body;
+
         // Check if the user is an admin
         if (req.user.role === 'admin') {
-            // If user is admin, check if userId is provided
+            // Extract the userId from the request body
+            const { userId } = req.body;
+
+            // Check if userId is provided
             if (!userId) {
                 return res.status(400).json({ message: 'User ID is required for tenant assignment.' });
             }
@@ -132,18 +137,39 @@ router.post('/tenant', verifyToken, async (req, res) => {
             }
 
             // Create the tenant and assign it to the specified user
-            const tenant = new Tenant({ name, email, phone, createdBy: userId });
-            await tenant.save();
-            res.status(201).json({ message: 'Tenant created successfully.', tenant });
+            const newTenant = await Tenant.create({
+                firstName,
+                middleName,
+                lastName,
+                idNumber,
+                dateOfBirth,
+                phoneNumber1,
+                phoneNumber2,
+                emergencyContact,
+                email,
+                address,
+                createdBy: userId, // Assign the tenant to the specified user
+                lease
+            });
+
+            // Return success response
+            res.status(201).json({ message: 'Tenant created successfully.', tenant: newTenant });
         } else {
             // If user is not an admin, restrict tenant creation
             return res.status(403).json({ message: 'Access forbidden. Only admin users can create tenants for specific users.' });
         }
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Internal server error' });
+        // Check if the error is a duplicate key error
+        if (error.code === 11000) {
+            // If a duplicate key error is detected, send an appropriate error response
+            res.status(400).json({ message: "A tenant already exists with the provided email or ID number." });
+        } else {
+            // If the error is not a duplicate key error, send a generic error response
+            res.status(500).json({ message: "An error occurred while creating a tenant.", error });
+        }
     }
 });
+
 // GET all tenants for all users (admin endpoint)
 router.get('/tenants', verifyAdminToken, async (req, res) => {
     try {

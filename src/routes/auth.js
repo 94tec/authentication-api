@@ -1,6 +1,7 @@
 // routes/auth.js
 const express = require('express');
 const bcrypt = require('bcrypt');
+require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const router = express.Router();
@@ -8,10 +9,11 @@ const router = express.Router();
 const initializePassport = require('../middleware/passport.js');
 const User = require('../models/Users.js');
 // Import the AdminUserModel
-const AdminUser = require('../models/adminUserModel');
+const AdminUser = require('../models/adminUserModel.js');
 const Tenant = require('../models/Tenant.js');
 const {verifyToken, requireRole } = require('../middleware/index.js');
 const { validateRegistration } = require('../middleware/validatorMiddleware');
+const validateTenant = require('../middleware/validateTenant');
 
 initializePassport(passport);
 
@@ -83,7 +85,7 @@ router.get('/profile', verifyToken, async (req, res) => {
         res.json(user);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: "An error occurred while getting  User Profile." });
     }
 });
 // fetch  all clients 
@@ -94,7 +96,7 @@ router.get('/users', verifyToken, async (req, res) => {
         res.json(users);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: "An error occurred while getting users." });
     }
 });    
 // Protected route example
@@ -129,7 +131,8 @@ function(req, res) {
 });
 router.post('/tenant', verifyToken, requireRole('user'), async (req, res) => {
     try {
-        const { name, email, phone } = req.body;
+        // Extract tenant data from the request body
+        const { firstName, middleName, lastName, idNumber, dateOfBirth, phoneNumber1, phoneNumber2, emergencyContact, email, address, lease } = req.body;
 
         // Ensure that only authenticated users can create tenants
         if (!req.user) {
@@ -143,16 +146,34 @@ router.post('/tenant', verifyToken, requireRole('user'), async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        const tenant = new Tenant({ name, email, phone, createdBy: userId });
-        await tenant.save();
-
+         // Create the tenant and assign it to the specified user
+         const newTenant = await Tenant.create({
+            firstName,
+            middleName,
+            lastName,
+            idNumber,
+            dateOfBirth,
+            phoneNumber1,
+            phoneNumber2,
+            emergencyContact,
+            email,
+            address,
+            createdBy: userId, // Assign the tenant to the specified user
+            lease
+        });
         // Now that tenant is created, you might want to fetch all tenants associated with the user again
         const tenants = await Tenant.find({ createdBy: userId });
 
         res.status(201).json({ message: 'Tenant created successfully.', tenant, tenants });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Internal server error' });
+        // Check if the error is a duplicate key error
+        if (error.code === 11000) {
+            // If a duplicate key error is detected, send an appropriate error response
+            res.status(400).json({ message: "A tenant already exists with the provided email or ID number." });
+        } else {
+            // If the error is not a duplicate key error, send a generic error response
+            res.status(500).json({ message: "An error occurred while creating the tenant.", error });
+        }
     }
 });
 
@@ -174,7 +195,8 @@ router.get('/tenants', verifyToken, requireRole('user'), async (req, res) => {
         res.status(200).json({ tenants });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: "An error occurred while getting the tenant." });
     }
 });
 module.exports = router;
+
